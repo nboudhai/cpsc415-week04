@@ -1,0 +1,17 @@
+[project]
+name = "ask-the-course"
+version = "0.1.0"
+description = "RAG-based CLI that answers questions about CPSC 415 from the course's Markdown pages."
+requires-python = ">=3.11"
+dependencies = [
+    "langchain-text-splitters>=0.3",
+    "requests>=2.32",
+    "numpy>=1.26",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ask_the_course*"]

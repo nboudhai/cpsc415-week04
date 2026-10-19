@@ -270,15 +270,16 @@
      Test-Path index.json
      ```
    - **Expected:** exit code `0`; `index.json` exists at the project root.
-   - **Shape check (one-liner):**
-     ```powershell
-     python -c "import json; d=json.load(open('index.json')); assert isinstance(d,list) and len(d)>0, 'empty or wrong shape'; r=d[0]; need={'file_path','section_heading','text','embedding'}; assert need<=r.keys(), f'missing keys: {need-set(r.keys())}'; assert isinstance(r['embedding'],list) and len(r['embedding'])==1536, f'wrong dim {len(r[\"embedding\"])}'; print(f'{len(d)} chunks; first file_path={r[\"file_path\"]!r}; first heading={r[\"section_heading\"]!r}')"
-     ```
-   - **Expected stdout:** `N chunks; first file_path='syllabus.md'; first heading='...'`
-     (or similar — the exact first record depends on file walk order).
-   - **What it proves:** the indexer hit OpenRouter successfully, returned
-     1536-dim embeddings, split the corpus into chunks, and attached
-     section headings.
+   - **Shape check:** `python scripts/check_index.py`
+   - **Expected stdout:** `N chunks; first file_path='...'; first heading='...'`
+     (the exact first record depends on file walk order).
+   - **Expected exit code:** `0`.
+   - **What it proves:** the indexer hit OpenRouter successfully, the
+     index is a JSON object with `embedding_model`, `embedding_dim`, and
+     a `chunks` list, returned 1536-dim embeddings, split the corpus
+     into chunks, and attached section headings. The model metadata in
+     `index.json` is what the asker will check on load to guard against
+     embedding-dimension drift.
 
 3. **Asker — happy path (with retrieval).**
    - **Command (PowerShell):**
