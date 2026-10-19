@@ -1,0 +1,32 @@
+[
+  {
+    "id": "q1-late-policy",
+    "text": "What is the late submission policy?",
+    "kind": "factual",
+    "expected": "Each student is allocated 3 late days per semester, usable at their discretion in 24-hour increments. No late assignments are accepted except through late days. Late days do not apply to presentations or the Comprehension Defense."
+  },
+  {
+    "id": "q2-office-hours",
+    "text": "When and where are the instructor's office hours?",
+    "kind": "factual",
+    "expected": "Office hours are Tuesdays, 10:00 AM to 12:00 PM in MECC 175, or by appointment. The instructor is on campus all day Mondays and Tuesdays."
+  },
+  {
+    "id": "q3-spending-cap",
+    "text": "What is the initial OpenRouter spending cap students should set for the first lab?",
+    "kind": "factual",
+    "expected": "Set a $5 spending limit for the initial lab and no recurring reset if the interface offers that choice. The cap belongs to the API key, not the account balance."
+  },
+  {
+    "id": "q4-portfolio",
+    "text": "What percentage of the grade is the Individual Portfolio, and what is its first milestone?",
+    "kind": "multi-page",
+    "expected": "The Individual Portfolio is 25 percent of the course grade, and the Comprehension Defense is conducted over its repository. Its first milestone is intent/ and spec.md due Monday, October 5 at 1:30 PM, submitted on Moodle as the repository URL plus the tag intent-spec."
+  },
+  {
+    "id": "q5-capital-france",
+    "text": "What is the capital of France?",
+    "kind": "out-of-scope",
+    "expected": "I can't find that in the course documents."
+  }
+]
