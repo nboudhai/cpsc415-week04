@@ -12,24 +12,24 @@ Implements [`intent/ask-the-course.md`](intent/ask-the-course.md).
 - **What it does:** Reads the course's Markdown pages from
   `../ai-integration-course/{syllabus.md, assignments/, weeks/01..03}` (skipping
   `weeks/04`), splits them into chunks by Markdown header, embeds each chunk
-  with a local sentence-transformer model, and writes a JSON index
-  (`index.json` at the project root) listing every chunk with its file path,
-  top-level section heading, text, and embedding vector.
-- **Language:** Python 3.11+. **Why:** Python has the most mature
-  single-file RAG tooling (LangChain text splitters, sentence-transformers,
-  the official `anthropic` SDK) and the lab is a single-shot tool, so the
-  lighter setup beats Java. Compared to Java + Spring AI: Spring AI is fine
-  for a service, but the boilerplate (Gradle, application context, beans)
-  is overkill here. Compared to Java + LangChain4j: a thinner ecosystem
-  for a one-off CLI.
-- **Model:** `openai/text-embedding-3-small` (via OpenRouter). **Why:** Matches the Week 4 setup verification, avoids heavy local ML downloads (like sentence-transformers), and runs quickly via the OpenRouter API we already configured.
-- **Why:** Runs on CPU, no API key, and on the MTEB retrieval benchmark it
-  scores 62.17 — essentially tied with OpenAI's hosted
-  `text-embedding-3-small` (62.3) and well above `all-MiniLM-L6-v2` (58.8).
-  Compared to the frontier `text-embedding-3-large` (64.6, $0.13/1M tokens):
-  the retrieval-quality gap is small on a focused, small-vocabulary course
-  corpus, and a local model means the professor can run the lab without
-  provisioning an API key.
+  by calling OpenRouter's `openai/text-embedding-3-small` embeddings endpoint
+  via `requests`, and writes a JSON index (`index.json` at the project root)
+  listing every chunk with its file path, top-level section heading, text,
+  and embedding vector.
+- **Language:** Python 3.11+. **Why:** Python has the libraries the
+  spec uses (LangChain text splitters, `requests`, NumPy) and the lab is a
+  single-shot tool, so the lighter setup beats Java. Compared to Java +
+  Spring AI: Spring AI is fine for a service, but the boilerplate (Gradle,
+  application context, beans) is overkill here. Compared to Java +
+  LangChain4j: a thinner ecosystem for a one-off CLI.
+- **Model:** `openai/text-embedding-3-small` (via OpenRouter). **Why:**
+  Matches the Week 4 setup verification, avoids heavy local ML downloads
+  (like a `sentence-transformers` model), and runs quickly through the
+  OpenRouter API we already configured. Cheap compared to the frontier
+  `text-embedding-3-large` ($0.13/1M tokens): on the MTEB retrieval
+  benchmark `text-embedding-3-small` scores 62.3 vs. 64.6 for the large
+  variant, and on a focused, small-vocabulary course corpus the gap is
+  small.
 - **Interfaces:**
   - **Input:** a fixed corpus path (`../ai-integration-course/`).
   - **Output:** `index.json` at the project root, with one record per chunk:
@@ -52,17 +52,20 @@ Implements [`intent/ask-the-course.md`](intent/ask-the-course.md).
   the work).
 - **Language:** Python 3.11+. **Why:** same reasoning as the indexer — one
   language for the whole tool, faster iteration than Java for a CLI.
-- **Model:** `claude-haiku-4-5` (generative). **Why:** fast, follows strict
-  format instructions reliably (the exact refusal string matters here), and
-  very cheap (~$1 in / $5 out per 1M tokens), so a semester of grading runs
-  is well under a cent. Compared to the frontier `claude-sonnet-5-5`:
-  Sonnet is meaningfully better at synthesizing across multiple retrieved
-  chunks for the multi-page policy question, but the gap narrows on a
-  small, well-scoped corpus and a strict output format. Use Haiku by
-  default; swap to Sonnet if the multi-page eval question is unsatisfactory.
+- **Model:** `minimax/minimax-m3` (generative, via OpenRouter). **Why:**
+  Routed by OpenRouter for the Week 4 lab setup, follows strict format
+  instructions reliably (the exact refusal string matters here), and is
+  cheap for a small corpus. Compared to a heavier frontier model
+  (`claude-sonnet-5-5` or similar): frontier models are better at
+  synthesizing across multiple retrieved chunks for the multi-page policy
+  question, but the gap narrows on a small, well-scoped corpus and a
+  strict output format. Use `minimax/minimax-m3` as the default; if the
+  multi-page eval question is unsatisfactory, swap to a frontier model
+  and re-run.
 - **Interfaces:**
   - **Input:** a positional `question` argument; flags `--no-retrieval` and
-    `--top-k` (default 5); env var `ANTHROPIC_API_KEY` for the LLM.
+    `--top-k` (default 5); env var `OPENROUTER_API_KEY` for the embedding
+    and chat-completion API calls.
   - **Output on stdout:**
     1. The LLM's answer (possibly with inline citations).
     2. A blank line.
@@ -89,14 +92,16 @@ Implements [`intent/ask-the-course.md`](intent/ask-the-course.md).
    top-level heading as a `section_heading` field on every chunk it
    produces. Sections longer than ~1000 characters are split further with
    a 200-character overlap, with the original `section_heading` preserved.
-3. The indexer embeds every chunk with `BAAI/bge-small-en-v1.5` and writes
-   `index.json` containing `{file_path, section_heading, text, embedding}`
-   per chunk.
+3. The indexer embeds every chunk via OpenRouter's
+   `openai/text-embedding-3-small` endpoint and writes `index.json`
+   containing `{file_path, section_heading, text, embedding}` per chunk.
 4. The asker accepts one question as a positional argument and (by
    default) prints the answer followed by the chunk list described in the
    Asker's Interfaces, in that order, separated by a blank line.
-5. The asker embeds the question with `BAAI/bge-small-en-v1.5` and
-   retrieves the top-k chunks by cosine similarity (default k=5).
+5. The asker embeds the question via OpenRouter's
+   `openai/text-embedding-3-small` endpoint (the same model the indexer
+   used) and retrieves the top-k chunks by cosine similarity
+   (default k=5).
 6. The asker sends the retrieved chunks to the LLM with a system prompt
    that:
    - instructs the model to answer only from the provided chunks,
@@ -140,13 +145,15 @@ Implements [`intent/ask-the-course.md`](intent/ask-the-course.md).
   to stderr and exits non-zero without calling the LLM.
 - **`index.json` missing:** the asker prints a clear error pointing at
   the indexer command and exits non-zero.
-- **Embedding model not downloaded:** the indexer downloads it on first
-  run; if the download fails (no network), the indexer prints a clear
-  error and exits non-zero. The asker fails the same way.
-- **LLM API call fails** (network, auth, rate limit, timeout): the asker
-  prints the error to stderr and exits non-zero. The eval script catches
-  this and records the failure in `CHECKS.md`, so a partial run is still
-  auditable.
+- **`OPENROUTER_API_KEY` missing or invalid:** the indexer and asker
+  check the env var before any HTTP call and exit non-zero with a clear
+  "set `OPENROUTER_API_KEY`" message if it is not set.
+- **OpenRouter API call fails** (network, auth, rate limit, 5xx, model
+  unavailable, timeout): the indexer writes `index.json` only after the
+  full embed loop succeeds (so a partial index is never left on disk);
+  the asker prints the error to stderr and exits non-zero. The eval
+  script catches this per question and records the failure in
+  `CHECKS.md`, so a partial run is still auditable.
 - **LLM returns something other than the answer or the exact refusal
   string:** the asker prints whatever the LLM returned, then prints the
   chunk list as usual. The eval script flags this in `CHECKS.md` as
@@ -159,17 +166,23 @@ Implements [`intent/ask-the-course.md`](intent/ask-the-course.md).
 
 ## Cost estimate
 
-- **Embeddings:** `BAAI/bge-small-en-v1.5` is local and free. The course
-  corpus is small (under ~100k tokens), so the index build is a few
-  seconds on CPU.
+- **Embeddings:** OpenRouter's `openai/text-embedding-3-small` is priced
+  at roughly **$0.02 per 1M tokens** (matches OpenAI direct). The course
+  corpus is small (under ~100k tokens), so the index build costs about
+  **$0.000002** once. Each question embeds ~50 tokens, so the per-question
+  embedding cost is negligible (~$0.0000001).
 - **LLM, with retrieval, per question:** input ≈ 5 chunks × ~250 tokens
   + ~250 token system prompt + ~50 token question = ~1.55k tokens in;
-  ~200 tokens out. At Haiku 4.5 pricing (~$1 in / $5 out per 1M tokens):
-  roughly **$0.0000026 per question**.
+  ~200 tokens out. Pricing for `minimax/minimax-m3` on OpenRouter should
+  be confirmed against OpenRouter's current price list; assuming a
+  cheap-tier rate on the order of $0.20 in / $1 out per 1M tokens, this
+  works out to roughly **$0.0000005 per question**. (Replace with the
+  actual OpenRouter rate once verified.)
 - **LLM, no retrieval, per question:** input ≈ 300 tokens; ~200 tokens
-  out. ~$0.0000013 per question.
-- **Per eval run** (10 calls = 5 questions × 2 modes): under $0.00005.
-- **A semester of grading** (say 20 eval runs): under $0.001.
+  out. Roughly half the with-retrieval cost.
+- **Per eval run** (10 calls = 5 questions × 2 modes): well under
+  $0.001 even with a generous price assumption.
+- **A semester of grading** (say 20 eval runs): well under $0.01.
 
 ## Out of scope
 
